@@ -147,6 +147,11 @@ sumDmg <- group_by(dataDmg, EVTYPE) %>%
        summarize( sumCrop = sum(CROPDMG, na.rm = T), sumProp = sum(PROPDMG,na.rm = T))
 ```  
 
+Remove unnecessary data
+
+```{r}
+rm(list = c("data","dataDmg","dataHealth","firstLines","cols"))
+```
 
 ## Results
 
