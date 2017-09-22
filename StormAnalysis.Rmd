@@ -1,0 +1,156 @@
+---
+title: "Bad weather damages on health and economy in the USA"
+author: "Alessandro Puiatti"
+date: "9/22/2017"
+output: html_document
+---
+[1]: https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf  "Storm Data Documentation"
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This documet summarizes the data analysis performed over the NOAA Storm Database 
+in order to understand which types of events are most harmful with respect to the
+population health and whcih have the greatest economic consequences. 
+A detailed descritption of the event types and how the harmful and economic
+damage are computed can be found at the National Weather Service 
+[Storm Data Documentation][1]
+
+
+
+## Data Processing
+The amount of data reach almost 0.5GB, so it would be better not to load in memory 
+the entire table but only the interested ones. For undertsanding which ones they are
+we first read 10 lines (the header an some data), just to have an idea of the data
+types and to recognize which are the cols that we have to load. In order to
+perform this operation we need to load two libraries: *data.table* and *R.utils*.
+For further computation other libraries are needed that are: *plyr* and *dplyr*.
+
+```{r}
+library(data.table)
+library(R.utils,warn.conflicts = FALSE, quietly = TRUE, verbose = FALSE)
+library(plyr) # for useful tools
+library(dplyr, warn.conflicts = FALSE, quietly = TRUE, verbose = FALSE)
+
+```
+
+Therefore the first opeartions are: unzip the data file (already downloaded), read 
+the first 10 lines on a variable (*firstLines*), and then look at them.
+
+```{r}
+bunzip2("repdata-data-StormData.csv.bz2", remove = F)
+firstLines <- read.csv("repdata-data-StormData.csv", nrows = 10)
+firstLines
+```
+
+As can be seen from *firstLines* the cols that are of our interest, checking also
+their meanings in the [Storm Data Documentation][1], are:
+
+- EVTYPE
+- FATALITIES
+- INJURIES
+- PROPDMG
+- PROPDMGEXP
+- CROPDMG
+- CROPDMGEXP
+
+So the next step si to extract from the database only these 7 cols
+
+```{r}
+cols <- c("EVTYPE", "FATALITIES", "INJURIES", "PROPDMG", "PROPDMGEXP", 
+          "CROPDMG", "CROPDMGEXP")
+data <- fread("repdata-data-StormData.csv", select = cols, showProgress = F)
+```
+
+Now, just to have an idea of the memory allocated for *data*
+
+```{r}
+sprintf("Size of only seven columns in memory: %s MB", floor(utils::object.size(data)/1000000))
+```
+that is almost one-tenth of the total memory needed for the entire dataset. 
+Now, we check for NAs values
+```{r}
+mean(is.na(data))
+```
+Given that there are no NAs we don't need to bother anymore about it in the next steps
+
+The last operations needed for computing the summaries required are then:
+
+1. reorganize the data grouped by *EVTYPE* for answering the question related to the population 
+health (*dataHealth*), after havin selcted only the related cols from *data*
+
+2. reorganize the data grouped by *EVTYPE*, for answering the question related to the most 
+damageful event (*dataDmg*), after havin selcted only the related cols from *data*
+
+
+#### Population health
+
+Select the related cols and remove all rows with null values
+
+```{r}
+cols <- c("EVTYPE", "FATALITIES", "INJURIES")
+dataHealth <- select(data, cols) %>%
+        filter(FATALITIES != 0 & INJURIES != 0)
+```
+
+Group the data by *EVTYPE* and summarize
+
+```{r}
+sumHealth <- group_by(dataHealth, EVTYPE) %>%
+        summarize(sumFatal = sum(FATALITIES), sumInjury = sum(INJURIES ))
+```  
+
+
+#### Damges
+
+Select the related cols and remove all rows with null values
+
+```{r}
+cols <- c("EVTYPE", "PROPDMG", "PROPDMGEXP", "CROPDMG", "CROPDMGEXP")
+dataDmg <- select(data, cols) %>%
+        filter(PROPDMG != 0 & CROPDMG != 0)
+```
+
+The two cols *PROPDMGEXP* and *CROPDMGEXP* have to be converted in integers with the values
+equivalent to the amount of expressed unit (look at [Storm Data Documentation][1]):
+
+- 10^3 for *K* 
+- 10^6 for *M*
+- 10^9 for *B* 
+
+However, looking at the chars presented in the two mention cols, we have other values than
+*K*, *M*, and *B*:
+```{r}
+unique(dataDmg$PROPDMGEXP)
+unique(dataDmg$CROPDMGEXP)
+```
+We can assume that the number "5", "3" and "0" are the power of 10, "m" is equal to "M"
+and "k" is equal to "K". The "" element would be considered as NA
+
+```{r}
+dataDmg$PROPDMGEXP <- as.numeric(revalue(dataDmg$PROPDMGEXP, c("K"=10^3, "M"=10^6, "m"=10^6,
+                                                    "B"=10^9, "5"=10^5, "0"=1, "3"=10^3)))
+dataDmg$CROPDMGEXP <- as.numeric(revalue(dataDmg$CROPDMGEXP, c("K"=10^3, "k"=10^3, "M"=10^6, "m"=10^6,
+                                                    "B"=10^9, "0"=1)))
+```
+
+Then we can create a new table with the *PROPDMG* and *CROPDMG* computed in dollars
+
+```{r}
+dataDmg <- transmute(dataDmg, EVTYPE, PROPDMG = PROPDMG*PROPDMGEXP, CROPDMG = CROPDMG*CROPDMGEXP)
+```
+
+Group the data by *EVTYPE* and summarize
+
+```{r}
+sumDmg <- group_by(dataDmg, EVTYPE) %>%
+       summarize( sumCrop = sum(CROPDMG, na.rm = T), sumProp = sum(PROPDMG,na.rm = T))
+```  
+
+
+## Results
+
+
+
+
+
