@@ -6,7 +6,7 @@ output: html_document
 ---
 [1]: https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf  "Storm Data Documentation"
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
 ```
 
 This documet summarizes the data analysis performed over the NOAA Storm Database 
@@ -26,7 +26,7 @@ types and to recognize which are the cols that we have to load. In order to
 perform this operation we need to load two libraries: *data.table* and *R.utils*.
 For further computation other libraries are needed that are: *plyr* and *dplyr*.
 
-```{r}
+```{r, results='hide', error=FALSE, warning=FALSE, message=FALSE}
 library(data.table)
 library(R.utils,warn.conflicts = FALSE, quietly = TRUE, verbose = FALSE)
 library(plyr) # for useful tools
@@ -93,13 +93,24 @@ dataHealth <- select(data, cols) %>%
         filter(FATALITIES != 0 & INJURIES != 0)
 ```
 
-Group the data by *EVTYPE* and summarize
+Group the data by *EVTYPE*, summarize, compute the percentages for *FATALITIES* 
+and *INJURIES* and finally reordered the data in descending order
 
 ```{r}
-sumHealth <- group_by(dataHealth, EVTYPE) %>%
-        summarize(sumFatal = sum(FATALITIES), sumInjury = sum(INJURIES ))
-```  
+sumHealth <- as.data.frame(group_by(dataHealth, EVTYPE) %>%
+        summarize(sumFatal = sum(FATALITIES), sumInjury = sum(INJURIES )) %>%
+        mutate(EVTYPE, sumFatal, percFatal = round(100*sumFatal/sum(sumFatal),2), 
+               sumInjury, percInj = round(100*sumInjury/sum(sumInjury),2)))
 
+sumFatalities <- data.frame(sumHealth$EVTYPE, sumHealth$sumFatal, sumHealth$percFatal)
+names(sumFatalities) <- c("EVTYPE", "Fatal", "percFatal")
+sumFatalities <- setorder(sumFatalities, -Fatal)
+
+sumInj <- data.frame(sumHealth$EVTYPE,sumHealth$sumInjury,sumHealth$percInj)
+names(sumInj) <- c("EVTYPE", "Injury", "percInj")
+sumInj <- setorder(sumInj, -Injury)
+
+```
 
 #### Damges
 
@@ -114,9 +125,9 @@ dataDmg <- select(data, cols) %>%
 The two cols *PROPDMGEXP* and *CROPDMGEXP* have to be converted in integers with the values
 equivalent to the amount of expressed unit (look at [Storm Data Documentation][1]):
 
-- 10^3 for *K* 
-- 10^6 for *M*
-- 10^9 for *B* 
+- 10^3^ for *K* 
+- 10^6^ for *M*
+- 10^9^ for *B* 
 
 However, looking at the chars presented in the two mention cols, we have other values than
 *K*, *M*, and *B*:
@@ -140,11 +151,23 @@ Then we can create a new table with the *PROPDMG* and *CROPDMG* computed in doll
 dataDmg <- transmute(dataDmg, EVTYPE, PROPDMG = PROPDMG*PROPDMGEXP, CROPDMG = CROPDMG*CROPDMGEXP)
 ```
 
-Group the data by *EVTYPE* and summarize
+Group the data by *EVTYPE*, summarize and compute also the percentages for *CROPDMG*
+and *PROPDMG*
 
 ```{r}
 sumDmg <- group_by(dataDmg, EVTYPE) %>%
-       summarize( sumCrop = sum(CROPDMG, na.rm = T), sumProp = sum(PROPDMG,na.rm = T))
+       summarize( sumCrop = sum(CROPDMG, na.rm = T), sumProp = sum(PROPDMG,na.rm = T)) %>%
+        mutate(EVTYPE, sumProp, percProp = round(100*sumProp/sum(sumProp),2),
+               sumCrop, percCrop = round(100*sumCrop/sum(sumCrop),2))
+
+sumCrop <- data.frame(sumDmg$EVTYPE, sumDmg$sumCrop, sumDmg$percCrop)
+names(sumCrop) <- c("EVTYPE", "Crop", "percCrop")
+sumCrop <- setorder(sumCrop, -Crop)
+
+sumProp <- data.frame(sumDmg$EVTYPE,sumDmg$sumProp,sumDmg$percProp)
+names(sumProp) <- c("EVTYPE", "Prop", "percProp")
+sumProp <- setorder(sumProp, -Prop)
+
 ```  
 
 Remove unnecessary data
@@ -153,7 +176,56 @@ Remove unnecessary data
 rm(list = c("data","dataDmg","dataHealth","firstLines","cols"))
 ```
 
+
+
 ## Results
+Having done all the preparatory data processing what is left now is to look at the results following 
+the two main questions.
+
+
+#### Across the United States, which types of events are most harmful with respect to population health?
+
+For answering this question we have to look in the *sumHealth* datase and find which event is more 
+harmful considering separately the *FATALITIES* and the *INJURIES*. Looking at the *sumHealth* data
+it turns out, and it makes sense, that the *Tornado* is the most harmful for both cases. However, the same progression does not follow equally for the other events, as reported in the following table for the first
+5 calamities more harmful that account for the 82.85%, in the case of *FATALITIES*, and the 89.63 for the 
+*INJURIES*
+```{r, fig.height=2.5}
+library(gridExtra)
+temp <- format(data.frame(sumFatalities[1:5,1], sumFatalities[1:5,2:3], sumInj[1:5,2:3], sumInj[1:5,1]), big.mark = "'")
+
+grid.table(rbind(temp,setNames(data.frame("","","","","",""), names(temp)), 
+                 setNames(data.frame("TOTAL", format(sum(sumFatalities[1:5,2]), big.mark = "'"),
+                 sum(sumFatalities[1:5,3]),format(sum(sumInj[1:5,2]), big.mark = "'"),
+                 sum(sumInj[1:5,3]),""),names(temp))), cols = c("EVTYPE", "Fatalities", "%", "Injuries",
+                 "%", "EVTYPE"), rows = NULL,  ttheme_default(base_size = 9))
+
+```
+
+In the following figures,
+indeed, it is possible to see how they are distributed for the first 5 calamities more harmful.
+
+```{r, fig.height=3, fig.cap="The 5 weather events that casues Fatalities and Ingiuries"}
+library(RColorBrewer)
+colors = brewer.pal(10,"Spectral")
+
+par(oma= c(0,0,3,0), mfrow=c(1,2),cex=0.5, cex.main=2)
+
+pie(sumFatalities$Fatal[1:5],sumFatalities$EVTYPE[1:5], col=colors, main = "Fatalities")
+pie(sumInj$Injury[1:5],sumInj$EVTYPE[1:5], col=colors, main = "Injuries")
+title(main = "The 5 more armful events: comparison between Fatality and Injury", outer = T)
+box("outer")
+
+```
+
+
+
+
+
+
+
+
+#### Across the United States, which types of events have the greatest economic consequences?
 
 
 
