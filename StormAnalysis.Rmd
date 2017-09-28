@@ -6,7 +6,7 @@ output: html_document
 ---
 [1]: https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf  "Storm Data Documentation"
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+knitr::opts_chunk$set(echo = TRUE) #, cache = TRUE)
 ```
 
 This documet summarizes the data analysis performed over the NOAA Storm Database 
@@ -190,6 +190,7 @@ harmful considering separately the *FATALITIES* and the *INJURIES*. Looking at t
 it turns out, and it makes sense, that the *Tornado* is the most harmful for both cases. However, the same progression does not follow equally for the other events, as reported in the following table for the first
 5 calamities more harmful that account for the 82.85%, in the case of *FATALITIES*, and the 89.63 for the 
 *INJURIES*
+
 ```{r, fig.height=2.5}
 library(gridExtra)
 temp <- format(data.frame(sumFatalities[1:5,1], sumFatalities[1:5,2:3], sumInj[1:5,2:3], sumInj[1:5,1]), big.mark = "'")
@@ -202,6 +203,8 @@ grid.table(rbind(temp,setNames(data.frame("","","","","",""), names(temp)),
 
 ```
 
+
+
 In the following figures,
 indeed, it is possible to see how they are distributed for the first 5 calamities more harmful.
 
@@ -213,7 +216,7 @@ par(oma= c(0,0,3,0), mfrow=c(1,2),cex=0.5, cex.main=2)
 
 pie(sumFatalities$Fatal[1:5],sumFatalities$EVTYPE[1:5], col=colors, main = "Fatalities")
 pie(sumInj$Injury[1:5],sumInj$EVTYPE[1:5], col=colors, main = "Injuries")
-title(main = "The 5 more armful events: comparison between Fatality and Injury", outer = T)
+title(main = "The 5 most armful events: comparison between Fatality and Injury", outer = T)
 box("outer")
 
 ```
@@ -227,7 +230,26 @@ box("outer")
 
 #### Across the United States, which types of events have the greatest economic consequences?
 
+As can be seen in the following graphs, in thsi case only the costs for the Property damage has a very high peak for a specific event, whyle the cost distribution for the Crop damage is more smooth. Moreover, differently from the previous case, the event that have the greatest economic conseuqences Property and Crop is not the same.
 
+
+```{r, fig.cap="Comparison between the most costly events that generate Property and Crop damage. The values represented on the plot are the ones greater than the mean for each case."}
+
+par(oma= c(0,0,3,0), mar=c(12,6,3,1), mfrow=c(1,2), cex = 0.8)
+
+barplot((sumProp[which(sumProp$Prop > mean(sumProp$Prop)),2])/10^9, 
+        names.arg = sumProp[which(sumProp$Prop > mean(sumProp$Prop)),1], 
+        las = 2, col = colors, ylab = "Total Costs in bilions of $", main = "Prop Damage")
+
+barplot((sumCrop[which(sumCrop$Crop >  mean(sumCrop$Crop)),2])/10^9,
+        names.arg = sumCrop[which(sumCrop$Crop > mean(sumCrop$Crop)),1], 
+        las = 2, ylim = c(min(sumProp$Prop)/10^9, max(sumProp$Prop)/10^9), 
+        ylab = "Total Costs in bilions of $", main = "Crop Damage", col = colors)
+
+title(main = "The most costly events: comparison between Property and Crop damages", outer = T)
+box("outer")
+
+````
 
 
 
